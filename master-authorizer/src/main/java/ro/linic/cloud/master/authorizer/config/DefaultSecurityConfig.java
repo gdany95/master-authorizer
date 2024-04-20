@@ -35,7 +35,8 @@ public class DefaultSecurityConfig {
         http.authorizeHttpRequests(authorizeRequests -> authorizeRequests.anyRequest()
                 .authenticated())
             .formLogin(withDefaults())
-            .oauth2Login(withDefaults());
+            .oauth2Login(withDefaults())
+            .csrf(csrf -> csrf.disable());
         return http.build();
     }
 }

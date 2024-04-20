@@ -1,6 +1,7 @@
 package ro.linic.cloud.master.authorizer.entity;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -48,6 +49,24 @@ public class MultiUser {
 	public Stream<Role> rolesOfTenant(final int tenantId)
 	{
 		return getRoles().stream()
-				.filter(role -> role.getTenantId() == tenantId);
+				.filter(role -> role.getTenantId() != null && role.getTenantId() == tenantId);
+	}
+
+	public Stream<Role> globalRoles() {
+		return getRoles().stream()
+				.filter(role -> role.getTenant() == null);
+	}
+
+	public Stream<Authority> allAuthorities() {
+		return getRoles().stream()
+				.flatMap(r -> r.getAuthorities().stream())
+				.distinct();
+	}
+	
+	public Stream<Authority> authoritiesOfTenantAndGlobal(final int tenantId) {
+		return getRoles().stream()
+				.filter(role -> role.getTenant() == null || Objects.equals(role.getTenantId(), tenantId))
+				.flatMap(r -> r.getAuthorities().stream())
+				.distinct();
 	}
 }

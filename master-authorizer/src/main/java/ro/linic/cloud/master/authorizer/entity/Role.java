@@ -69,4 +69,14 @@ public class Role {
 	public Integer getTenantId() {
 		return tenant != null ? tenant.getId() : null;
 	}
+	
+	public boolean isSuperAdmin()
+	{
+		return SUPERADMIN.equalsIgnoreCase(getName());
+	}
+	
+	public boolean isSysAdmin()
+	{
+		return SYSADMIN.equalsIgnoreCase(getName());
+	}
 }

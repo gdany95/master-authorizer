@@ -7,4 +7,5 @@ import ro.linic.cloud.master.authorizer.entity.Tenant;
 
 @JaversSpringDataAuditable
 public interface TenantRepository extends JpaRepository<Tenant, Integer> {
+	boolean existsByName(String name);
 }

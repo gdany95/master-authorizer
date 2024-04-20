@@ -6,6 +6,7 @@ import static ro.linic.util.commons.StringUtils.globalIsMatch;
 import static ro.linic.util.commons.StringUtils.isEmpty;
 import static ro.linic.util.commons.StringUtils.processForStoring;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -29,6 +30,7 @@ import ro.linic.cloud.master.authorizer.common.I18n;
 import ro.linic.cloud.master.authorizer.dto.RoleUpdateDTO;
 import ro.linic.cloud.master.authorizer.entity.Authority;
 import ro.linic.cloud.master.authorizer.entity.Role;
+import ro.linic.cloud.master.authorizer.repository.MultiUserRepository;
 import ro.linic.cloud.master.authorizer.repository.RoleRepository;
 import ro.linic.cloud.master.authorizer.repository.TenantRepository;
 import ro.linic.util.commons.StringUtils.TextFilterMethod;
@@ -37,6 +39,7 @@ import ro.linic.util.commons.StringUtils.TextFilterMethod;
 @RequestMapping("/role")
 public class RoleController {
 	@Autowired private I18n i18n;
+	@Autowired private MultiUserRepository userRepo;
 	@Autowired private RoleRepository roleRepo;
 	@Autowired private TenantRepository tenantRepo;
 	
@@ -68,7 +71,7 @@ public class RoleController {
 		
 		final Set<Authority> authorities = role.getAuthorities();
 		final Set<Authority> invalidAuthorities = authorities.stream()
-			.filter(permissionCode -> !authorities.containsAll(Authority.AUTHORITY_TO_REQUIRED_AUTH.get(permissionCode)))
+			.filter(auth -> !authorities.containsAll(Authority.AUTHORITY_TO_REQUIRED_AUTH.getOrDefault(auth, List.of())))
 			.collect(Collectors.toUnmodifiableSet());
 		
 		// check that all required authorities are added for the selected authorities
@@ -76,12 +79,14 @@ public class RoleController {
 		{
 			final String sourceAuths = invalidAuthorities.stream()
 					.map(Authority::toString)
+					.sorted()
 					.map(i18n::msg)
 					.collect(Collectors.joining(LIST_SEPARATOR));
 			final String requiredAuths = invalidAuthorities.stream()
 					.flatMap(invalidAuth -> Authority.AUTHORITY_TO_REQUIRED_AUTH.get(invalidAuth).stream())
 					.distinct()
 					.map(Authority::toString)
+					.sorted()
 					.map(i18n::msg)
 					.collect(Collectors.joining(LIST_SEPARATOR));
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, i18n.msg(Messages.RoleController_InvalidAuthorities, NEWLINE,
@@ -100,6 +105,10 @@ public class RoleController {
 		// cannot be SysAdmin role
 		if (globalIsMatch(role.getName(), Role.SYSADMIN, TextFilterMethod.EQUALS))
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, i18n.msg(Messages.NameReserved, Role.SYSADMIN));
+		
+		// cannot be global role
+		if (role.getTenant() == null)
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, i18n.msg(Messages.RoleController_SystemRoleErr));
 	}
 	
 	private boolean rolenameIsUsed(final Role role) {
@@ -117,6 +126,7 @@ public class RoleController {
 		final String oldName = dbRole.getName();
 	
 		final Role tempRole = new Role();
+		tempRole.setTenant(dbRole.getTenant());
 		tempRole.setName(processForStoring(roleDto.getName()));
 		tempRole.setSystem(dbRole.isSystem());
 		tempRole.setAuthorities(roleDto.getAuthorities());
@@ -155,7 +165,7 @@ public class RoleController {
 		if (toBeRemoved.isSystem())
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, i18n.msg(Messages.RoleController_SystemRoleErr));
 		
-		roleRepo.deleteUserConnections(roleId);
-		roleRepo.deleteById(roleId);
+		userRepo.findAllByRolesContains(toBeRemoved).forEach(mu -> mu.getRoles().remove(toBeRemoved));
+		roleRepo.delete(toBeRemoved);
 	}
 }

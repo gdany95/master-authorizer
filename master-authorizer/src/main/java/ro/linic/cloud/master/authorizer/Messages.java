@@ -13,4 +13,11 @@ public class Messages {
 	public static final String TenantMissing = "TenantMissing";
 	public static final String RoleController_RoleTenantMismatch = "RoleController_RoleTenantMismatch";
 	public static final String RoleMissing = "RoleMissing";
+	public static final String UserController_SuperadminRequired = "UserController_SuperadminRequired";
+	public static final String UserController_SuperadminChangeAnother = "UserController_SuperadminChangeAnother";
+	public static final String UserController_RoleReserved = "UserController_RoleReserved";
+	public static final String UserController_ChangeNotAllowed = "UserController_ChangeNotAllowed";
+	public static final String TenantMismatch = "TenantMismatch";
+	public static final String TenantExists = "TenantExists";
+	public static final String UserController_GlobalRoleNotAllowed = "UserController_GlobalRoleNotAllowed";
 }
