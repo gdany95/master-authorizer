@@ -20,4 +20,5 @@ public class Messages {
 	public static final String TenantMismatch = "TenantMismatch";
 	public static final String TenantExists = "TenantExists";
 	public static final String UserController_GlobalRoleNotAllowed = "UserController_GlobalRoleNotAllowed";
+	public static final String InviteTokenInvalid = "InviteTokenInvalid";
 }

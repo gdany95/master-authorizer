@@ -3,9 +3,11 @@ package ro.linic.cloud.master.authorizer.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -38,9 +40,11 @@ import ro.linic.cloud.master.authorizer.Messages;
 import ro.linic.cloud.master.authorizer.TestData;
 import ro.linic.cloud.master.authorizer.common.I18n;
 import ro.linic.cloud.master.authorizer.entity.Authority;
+import ro.linic.cloud.master.authorizer.entity.InviteToken;
 import ro.linic.cloud.master.authorizer.entity.MultiUser;
 import ro.linic.cloud.master.authorizer.entity.Role;
 import ro.linic.cloud.master.authorizer.entity.Tenant;
+import ro.linic.cloud.master.authorizer.repository.InviteTokenRepository;
 import ro.linic.cloud.master.authorizer.repository.MultiUserRepository;
 import ro.linic.cloud.master.authorizer.repository.RoleRepository;
 import ro.linic.cloud.master.authorizer.repository.TenantRepository;
@@ -71,6 +75,7 @@ public class UserControllerIntegrationTest {
 	@Autowired private TenantRepository tenantRepo;
 	@Autowired private RoleRepository roleRepo;
 	@Autowired private MultiUserRepository userRepo;
+	@Autowired private InviteTokenRepository tokenRepo;
 	
 	@BeforeEach
 	public void init() {
@@ -79,6 +84,9 @@ public class UserControllerIntegrationTest {
 	
 	@Test
 	public void givenUnauthenticated_whenCallApis_thenForbidden() throws Exception {
+		mockMvc.perform(get("/user"))
+        .andExpect(status().is3xxRedirection());
+		
     	mockMvc.perform(get("/user/authorities"))
             .andExpect(status().is3xxRedirection());
     	
@@ -92,6 +100,14 @@ public class UserControllerIntegrationTest {
         .andExpect(status().is3xxRedirection());
     	
     	mockMvc.perform(put("/user"))
+        .andExpect(status().is3xxRedirection());
+    	
+    	mockMvc.perform(post("/user"))
+        .andExpect(status().is3xxRedirection());
+    	
+    	mockMvc.perform(get("/user/accept/token"))
+        .andExpect(status().is3xxRedirection());
+    	mockMvc.perform(post("/user/accept/token"))
         .andExpect(status().is3xxRedirection());
     }
 	
@@ -634,6 +650,212 @@ public class UserControllerIntegrationTest {
 		mockMvc.perform(put("/user").content("my brand new name"))
 				.andExpect(status().isOk());
 		assertThat(TestData.defaultUser.getDisplayName()).isEqualTo("my brand new name");
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenTenantMissing_whenInviteToTenant_thenThrowException() throws Exception {
+		mockMvc.perform(post("/user").header("X-TenantID", 1)
+				.content(objectMapper.writeValueAsString(Set.of())).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isPreconditionFailed())
+				.andExpect(status().reason(i18n.msg(Messages.TenantMissing, 1)));
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenNewRoleIsSuperadmin_whenInviteToTenant_thenThrowException() throws Exception {
+		TestData.saveData();
+
+		mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(TestData.superadminRole.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isNotAcceptable())
+				.andExpect(status().reason(i18n.msg(Messages.UserController_SuperadminRequired, Role.SUPERADMIN)));
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenNewRoleIsSuperadminPermitted_whenInviteToTenant_thenCreateInvite() throws Exception {
+		TestData.saveData();
+		TestData.defaultUser.getRoles().add(TestData.superadminRole);
+		
+		final MvcResult result = mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(TestData.superadminRole.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isOk())
+				.andReturn();
+		final InviteToken token = tokenRepo.findById(result.getResponse().getContentAsString()).get();
+		assertThat(token.getTenant()).isEqualTo(TestData.defaultTenant);
+		assertThat(token.getRoles()).containsExactly(TestData.superadminRole.getId());
+		assertThat(token.getToken()).hasSizeGreaterThan(16);
+		assertThat(token.isExpired()).isFalse();
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenNewRoleIsSysadmin_whenInviteToTenant_thenThrowException() throws Exception {
+		TestData.saveData();
+		TestData.defaultUser.getRoles().add(TestData.superadminRole);
+		
+		mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(TestData.sysadminRole.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isNotAcceptable())
+				.andExpect(status().reason(i18n.msg(Messages.UserController_RoleReserved, Role.SYSADMIN)));
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenNewRoleFromAnotherTenant_whenInviteToTenant_thenThrowException() throws Exception {
+		TestData.saveData();
+		Tenant tenant2 = new Tenant();
+		tenant2.setName("Tenant 2");
+		tenant2 = tenantRepo.save(tenant2);
+		
+		Role roleTenant2 = new Role();
+		roleTenant2.setName("Default role tenant 2");
+		roleTenant2.setTenant(tenant2);
+		roleTenant2.setAuthorities(new HashSet<>(Authority.ALL_TENANT_AUTHORITIES));
+		roleTenant2 = roleRepo.save(roleTenant2);
+		
+		mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(roleTenant2.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isNotAcceptable())
+				.andExpect(status().reason(i18n.msg(Messages.TenantMismatch)));
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenNewRoleIsGlobal_whenInviteToTenant_thenThrowException() throws Exception {
+		TestData.saveData();
+
+		mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(TestData.globalRole.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isNotAcceptable())
+				.andExpect(status().reason(i18n.msg(Messages.UserController_GlobalRoleNotAllowed)));
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenValidChange_whenInviteToTenant_thenCreateInvite() throws Exception {
+		TestData.saveData();
+		
+		Role newRole = new Role();
+		newRole.setName("New role");
+		newRole.setTenant(TestData.defaultTenant);
+		newRole.setAuthorities(new HashSet<>(Authority.ALL_TENANT_AUTHORITIES));
+		newRole = roleRepo.save(newRole);
+		
+		final MvcResult result = mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(newRole.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isOk())
+				.andReturn();
+		final InviteToken token = tokenRepo.findById(result.getResponse().getContentAsString()).get();
+		assertThat(token.getTenant()).isEqualTo(TestData.defaultTenant);
+		assertThat(token.getRoles()).containsExactly(newRole.getId());
+		assertThat(token.getToken()).hasSizeGreaterThan(16);
+		assertThat(token.isExpired()).isFalse();
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "CREATE_USERS")
+	public void givenMultipleNewRoles_whenInviteToTenant_thenAddAllNewRoles() throws Exception {
+		TestData.saveData();
+		
+		Role newRole1 = new Role();
+		newRole1.setName("New role 1");
+		newRole1.setTenant(TestData.defaultTenant);
+		newRole1.getAuthorities().add(Authority.VIEW_ROLES);
+		newRole1 = roleRepo.save(newRole1);
+		
+		Role newRole2 = new Role();
+		newRole2.setName("New role 2");
+		newRole2.setTenant(TestData.defaultTenant);
+		newRole2.getAuthorities().add(Authority.VIEW_USERS);
+		newRole2 = roleRepo.save(newRole2);
+		
+		final MvcResult result = mockMvc.perform(post("/user").header("X-TenantID", TestData.defaultTenant.getId())
+				.content(objectMapper.writeValueAsString(Set.of(newRole1.getId(), newRole2.getId()))).contentType(MediaType.APPLICATION_JSON))
+				.andExpect(status().isOk())
+				.andReturn();
+		final InviteToken token = tokenRepo.findById(result.getResponse().getContentAsString()).get();
+		assertThat(token.getTenant()).isEqualTo(TestData.defaultTenant);
+		assertThat(token.getRoles()).containsExactlyInAnyOrder(newRole1.getId(), newRole2.getId());
+		assertThat(token.getToken()).hasSizeGreaterThan(16);
+		assertThat(token.isExpired()).isFalse();
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login
+	public void givenTokenMissing_whenAcceptInvite_thenThrowException() throws Exception {
+		mockMvc.perform(post("/user/accept/token"))
+				.andExpect(status().isBadRequest())
+				.andExpect(status().reason(i18n.msg(Messages.InviteTokenInvalid)));
+	}
+	
+	@Test
+	@WithOAuth2Login
+	public void givenTokenExpired_whenAcceptInvite_thenThrowException() throws Exception {
+		TestData.saveData();
+		InviteToken token = new InviteToken();
+		token.setToken("token");
+		token.setExpiryDate(Instant.now().minusSeconds(10));
+		token = tokenRepo.save(token);
+		
+		mockMvc.perform(post("/user/accept/"+token.getToken()))
+		.andExpect(status().isBadRequest())
+		.andExpect(status().reason(i18n.msg(Messages.InviteTokenInvalid)));
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login
+	public void givenRoleMissing_whenAcceptInvite_thenDoNothing() throws Exception {
+		TestData.saveData();
+		InviteToken token = new InviteToken();
+		token.setToken("token");
+		token.setTenant(TestData.defaultTenant);
+		token.getRoles().add(-1L);
+		token = tokenRepo.save(token);
+		
+		mockMvc.perform(post("/user/accept/"+token.getToken()))
+		.andExpect(status().isOk());
+		
+		assertThat(TestData.defaultUser.getRoles()).containsExactly(TestData.defaultRole);
+		assertThat(tokenRepo.findById(token.getToken())).isEmpty();
+		
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login
+	public void givenValidToken_whenAcceptInvite_thenAddRolesAndDeleteToken() throws Exception {
+		TestData.saveData();
+		InviteToken token = new InviteToken();
+		token.setToken("token");
+		token.setTenant(TestData.defaultTenant);
+		token.getRoles().add(TestData.superadminRole.getId());
+		token = tokenRepo.save(token);
+		
+		mockMvc.perform(post("/user/accept/"+token.getToken()))
+		.andExpect(status().isOk());
+		
+		assertThat(TestData.defaultUser.getRoles()).containsExactlyInAnyOrder(TestData.defaultRole, TestData.superadminRole);
+		assertThat(tokenRepo.findById(token.getToken())).isEmpty();
 		
 		TestData.deleteAllData();
 	}

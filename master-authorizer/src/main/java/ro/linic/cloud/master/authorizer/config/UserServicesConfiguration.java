@@ -46,7 +46,7 @@ public class UserServicesConfiguration {
     }
 
     @Bean
-    public OAuth2UserService<OAuth2UserRequest,OAuth2User> oAuth2UserService() {
+    public OAuth2UserService<OAuth2UserRequest, OAuth2User> oAuth2UserService() {
         return new OAuth2UserServiceImpl();
     }
 
