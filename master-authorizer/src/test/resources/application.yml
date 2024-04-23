@@ -29,7 +29,10 @@ spring:
                 - http://127.0.0.1:8080/login/oauth2/code/articles-client-oidc
               scopes:
                 - openid
+  flyway:
+    enabled: false
 
 server:
   port: 9000
+
 

@@ -212,7 +212,7 @@ public class UserControllerIntegrationTest {
 	@Test
 	@WithOAuth2Login(authorities = "DELETE_USERS")
 	public void givenUserMissing_whenRemoveFromTenant_thenDoNothing() throws Exception {
-		mockMvc.perform(delete("/user/1").header("X-TenantID", 1))
+		mockMvc.perform(delete("/user/-1").header("X-TenantID", 1))
 				.andExpect(status().isOk());
 		assertThat(userRepo.findById(1)).isEmpty();
 		assertThat(userRepo.findAll()).isEmpty();
@@ -673,6 +673,7 @@ public class UserControllerIntegrationTest {
 				.andExpect(status().isNotAcceptable())
 				.andExpect(status().reason(i18n.msg(Messages.UserController_SuperadminRequired, Role.SUPERADMIN)));
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -692,6 +693,7 @@ public class UserControllerIntegrationTest {
 		assertThat(token.getToken()).hasSizeGreaterThan(16);
 		assertThat(token.isExpired()).isFalse();
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -706,6 +708,7 @@ public class UserControllerIntegrationTest {
 				.andExpect(status().isNotAcceptable())
 				.andExpect(status().reason(i18n.msg(Messages.UserController_RoleReserved, Role.SYSADMIN)));
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -728,6 +731,7 @@ public class UserControllerIntegrationTest {
 				.andExpect(status().isNotAcceptable())
 				.andExpect(status().reason(i18n.msg(Messages.TenantMismatch)));
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -741,6 +745,7 @@ public class UserControllerIntegrationTest {
 				.andExpect(status().isNotAcceptable())
 				.andExpect(status().reason(i18n.msg(Messages.UserController_GlobalRoleNotAllowed)));
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -765,6 +770,7 @@ public class UserControllerIntegrationTest {
 		assertThat(token.getToken()).hasSizeGreaterThan(16);
 		assertThat(token.isExpired()).isFalse();
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -795,6 +801,7 @@ public class UserControllerIntegrationTest {
 		assertThat(token.getToken()).hasSizeGreaterThan(16);
 		assertThat(token.isExpired()).isFalse();
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -812,6 +819,7 @@ public class UserControllerIntegrationTest {
 		TestData.saveData();
 		InviteToken token = new InviteToken();
 		token.setToken("token");
+		token.setTenant(TestData.defaultTenant);
 		token.setExpiryDate(Instant.now().minusSeconds(10));
 		token = tokenRepo.save(token);
 		
@@ -819,6 +827,7 @@ public class UserControllerIntegrationTest {
 		.andExpect(status().isBadRequest())
 		.andExpect(status().reason(i18n.msg(Messages.InviteTokenInvalid)));
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -838,6 +847,7 @@ public class UserControllerIntegrationTest {
 		assertThat(TestData.defaultUser.getRoles()).containsExactly(TestData.defaultRole);
 		assertThat(tokenRepo.findById(token.getToken())).isEmpty();
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 	
@@ -857,6 +867,7 @@ public class UserControllerIntegrationTest {
 		assertThat(TestData.defaultUser.getRoles()).containsExactlyInAnyOrder(TestData.defaultRole, TestData.superadminRole);
 		assertThat(tokenRepo.findById(token.getToken())).isEmpty();
 		
+		tokenRepo.deleteAll();
 		TestData.deleteAllData();
 	}
 }

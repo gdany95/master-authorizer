@@ -58,6 +58,10 @@
 		    <version>3.7.3</version>
 		</dependency>
 		<dependency>
+		    <groupId>org.flywaydb</groupId>
+		    <artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
 		    <groupId>ro.linic.util</groupId>
 		    <artifactId>commons</artifactId>
 		    <version>0.0.6</version>
@@ -119,6 +123,10 @@
 		            </exclude>
 		          </excludes>
 		        </configuration>
+			</plugin>
+			<plugin>
+			    <groupId>org.flywaydb</groupId>
+			    <artifactId>flyway-maven-plugin</artifactId>
 			</plugin>
 		</plugins>
 	</build>
