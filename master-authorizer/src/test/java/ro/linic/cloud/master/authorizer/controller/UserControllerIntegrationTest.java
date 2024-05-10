@@ -85,30 +85,30 @@ public class UserControllerIntegrationTest {
 	@Test
 	public void givenUnauthenticated_whenCallApis_thenForbidden() throws Exception {
 		mockMvc.perform(get("/user"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
 		
     	mockMvc.perform(get("/user/authorities"))
-            .andExpect(status().is3xxRedirection());
+            .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(delete("/user"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(delete("/user/1"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(put("/user/1/roles"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(put("/user"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(post("/user"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(get("/user/accept/token"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	mockMvc.perform(post("/user/accept/token"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     }
 	
 	@Test
@@ -188,6 +188,102 @@ public class UserControllerIntegrationTest {
 		TestData.defaultUser.getRoles().add(TestData.globalRole);
 
 		final MvcResult result = mockMvc.perform(get("/user/authorities").header("X-TenantID", TestData.defaultTenant.getId()))
+				.andExpect(status().isOk())
+				.andReturn();
+		final Set<Authority> authsResult = objectMapper.readValue(result.getResponse().getContentAsString(), new TypeReference<Set<Authority>>(){});
+		assertThat(authsResult).containsExactlyElementsOf(Authority.ALL_GLOBAL_AUTHORITIES);
+
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login
+	public void givenMissingReadScope_whenUserAuthorities_thenForbidden() throws Exception {
+		TestData.saveData();
+		
+		mockMvc.perform(get("/user/"+TestData.defaultUser.getId()+"/authorities").header("X-TenantID", 1))
+				.andExpect(status().isForbidden());
+		
+		TestData.deleteAllData();
+    }
+	
+	@Test
+	@WithOAuth2Login(authorities = "SCOPE_authorities.read")
+	public void givenUserMissing_whenUserAuthorities_thenReturnEmptyAuths() throws Exception {
+		final MvcResult result = mockMvc.perform(get("/user/1/authorities").header("X-TenantID", 1))
+				.andExpect(status().isOk())
+				.andReturn();
+		final Set<Authority> authsResult = objectMapper.readValue(result.getResponse().getContentAsString(), new TypeReference<Set<Authority>>(){});
+		assertThat(authsResult).isEmpty();
+    }
+	
+	@Test
+	@WithOAuth2Login(authorities = "SCOPE_authorities.read")
+	public void givenDefaultUser_whenUserAuthorities_thenReturnDefaultAuths() throws Exception {
+		TestData.saveData();
+
+		final MvcResult result = mockMvc.perform(get("/user/"+TestData.defaultUser.getId()+"/authorities").header("X-TenantID", TestData.defaultTenant.getId()))
+				.andExpect(status().isOk())
+				.andReturn();
+		final Set<Authority> authsResult = objectMapper.readValue(result.getResponse().getContentAsString(), new TypeReference<Set<Authority>>(){});
+		assertThat(authsResult).containsExactlyInAnyOrderElementsOf(Authority.ALL_TENANT_AUTHORITIES);
+
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "SCOPE_authorities.read")
+	public void givenMultipleRolesForUser_whenUserAuthorities_thenReturnAuthsForTenant() throws Exception {
+		TestData.saveData();
+		Tenant tenant2 = new Tenant();
+		tenant2.setName("Tenant 2");
+		tenant2 = tenantRepo.save(tenant2);
+		
+		Role tenant2Role = new Role();
+		tenant2Role.setName("Default role");
+		tenant2Role.setTenant(tenant2);
+		tenant2Role.setAuthorities(Set.of(Authority.VIEW_ROLES));
+		tenant2Role = roleRepo.save(tenant2Role);
+		
+		TestData.defaultUser.setRoles(new HashSet<>());
+		TestData.defaultUser.getRoles().add(TestData.defaultRole);
+		TestData.defaultUser.getRoles().add(tenant2Role);
+
+		final MvcResult result = mockMvc.perform(get("/user/"+TestData.defaultUser.getId()+"/authorities").header("X-TenantID", tenant2.getId()))
+				.andExpect(status().isOk())
+				.andReturn();
+		final Set<Authority> authsResult = objectMapper.readValue(result.getResponse().getContentAsString(), new TypeReference<Set<Authority>>(){});
+		assertThat(authsResult).containsExactly(Authority.VIEW_ROLES);
+
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "SCOPE_authorities.read")
+	public void givenHasAlsoGlobalRole_whenUserAuthorities_thenConcatGlobalAuths() throws Exception {
+		TestData.saveData();
+		TestData.defaultUser.setRoles(new HashSet<>());
+		TestData.defaultUser.getRoles().add(TestData.defaultRole);
+		TestData.defaultUser.getRoles().add(TestData.globalRole);
+
+		final MvcResult result = mockMvc.perform(get("/user/"+TestData.defaultUser.getId()+"/authorities").header("X-TenantID", TestData.defaultTenant.getId()))
+				.andExpect(status().isOk())
+				.andReturn();
+		final Set<Authority> authsResult = objectMapper.readValue(result.getResponse().getContentAsString(), new TypeReference<Set<Authority>>(){});
+		assertThat(authsResult).containsExactlyInAnyOrderElementsOf(Stream.concat(Authority.ALL_TENANT_AUTHORITIES.stream(),
+				Authority.ALL_GLOBAL_AUTHORITIES.stream()).collect(Collectors.toSet()));
+
+		TestData.deleteAllData();
+	}
+	
+	@Test
+	@WithOAuth2Login(authorities = "SCOPE_authorities.read")
+	public void givenHasGlobalRole_whenUserAuthorities_thenReturnGlobalAuths() throws Exception {
+		TestData.saveData();
+		TestData.defaultUser.setRoles(new HashSet<>());
+		TestData.defaultUser.getRoles().add(TestData.globalRole);
+
+		final MvcResult result = mockMvc.perform(get("/user/"+TestData.defaultUser.getId()+"/authorities").header("X-TenantID", TestData.defaultTenant.getId()))
 				.andExpect(status().isOk())
 				.andReturn();
 		final Set<Authority> authsResult = objectMapper.readValue(result.getResponse().getContentAsString(), new TypeReference<Set<Authority>>(){});

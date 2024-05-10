@@ -60,9 +60,19 @@ public class UserController {
     }
 	
 	@GetMapping("/authorities")
-    public Set<Authority> authorities(@AuthenticationPrincipal final AuthenticatedPrincipal principal,
+    public Set<Authority> authorities(final Authentication principal,
     		@RequestHeader("X-TenantID") final int tenantId) {
         return findUser(principal.getName())
+        		.stream()
+                .flatMap(u -> u.authoritiesOfTenantAndGlobal(tenantId))
+                .collect(Collectors.toSet());
+    }
+	
+	@Secured("SCOPE_authorities.read")
+	@GetMapping("/{principal}/authorities")
+    public Set<Authority> userAuthorities(@PathVariable final String principal,
+    		@RequestHeader("X-TenantID") final int tenantId) {
+        return findUser(principal)
         		.stream()
                 .flatMap(u -> u.authoritiesOfTenantAndGlobal(tenantId))
                 .collect(Collectors.toSet());

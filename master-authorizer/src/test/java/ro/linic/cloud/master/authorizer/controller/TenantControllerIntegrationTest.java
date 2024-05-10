@@ -73,10 +73,10 @@ public class TenantControllerIntegrationTest {
 	@Test
 	public void givenUnauthenticated_whenCallApis_thenForbidden() throws Exception {
     	mockMvc.perform(post("/tenant"))
-            .andExpect(status().is3xxRedirection());
+            .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(put("/tenant"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     }
 	
 	@Test

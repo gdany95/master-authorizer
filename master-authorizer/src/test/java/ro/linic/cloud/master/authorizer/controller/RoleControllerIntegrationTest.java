@@ -79,26 +79,26 @@ public class RoleControllerIntegrationTest {
 	@Test
 	public void givenUnauthenticated_whenCallApis_thenForbidden() throws Exception {
     	mockMvc.perform(post("/role"))
-            .andExpect(status().is3xxRedirection());
+            .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(put("/role"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(delete("/role/1"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     }
 	
 	@Test
 	@WithAnonymousUser
 	public void givenAnonymous_whenCallApis_thenForbidden() throws Exception {
     	mockMvc.perform(post("/role"))
-            .andExpect(status().is3xxRedirection());
+            .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(put("/role"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     	
     	mockMvc.perform(delete("/role/1"))
-        .andExpect(status().is3xxRedirection());
+        .andExpect(status().is4xxClientError());
     }
 	
 	@Test

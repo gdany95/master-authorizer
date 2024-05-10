@@ -25,6 +25,17 @@ spring:
                 - http://127.0.0.1:8080/login/oauth2/code/articles-client-oidc
               scopes:
                 - openid
+          authorities-reader:
+            registration:
+              client-id: authorities-reader
+              client-secret: "{noop}authorities-reader"
+              client-name: authorities-reader
+              client-authentication-methods: 
+                - client_secret_post
+                - client_secret_basic
+              authorization-grant-types: client_credentials
+              scopes: authorities.read
+              redirect-uris: http://127.0.0.1:8090/login/oauth2/code/authorities-reader
 server:
   port: 9000
   

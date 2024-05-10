@@ -26,6 +26,7 @@ Authorization is role-based. Each `MultiUser` can have multiple roles within a T
 
 Prerequisites:
 - Postgres. This service uses the `jsonb` data format, native to Postgres, for storing JSON, thus an embedded H2 database will not work.
+- Dependencies: ro.linic.util:commons(these are added as Maven dependencies, but are not on Maven Central, so you will need to import the projects in your workspace and run `mvn install` to install them in your local maven repo)
 
 Installation:
 1. Configure the Postgres datasource connection in application.yml
